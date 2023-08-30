@@ -1,0 +1,20 @@
+{
+  "name": "peaks-multitrack",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.2",
+    "vite": "^4.4.5"
+  },
+  "dependencies": {
+    "konva": "^9.2.0",
+    "peaks.js": "^3.0.0",
+    "waveform-data": "^4.3.0"
+  }
+}
