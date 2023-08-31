@@ -1,12 +1,11 @@
 import './style.css'
 
 import Peaks from 'peaks.js';
-import Player from './player.ts';
 import Multitrack from './multitrack.ts';
+import * as Tone from 'tone';
 
-const audioContext = new AudioContext();
-const player = new Player();
-const multitrack = new Multitrack(audioContext, player);
+const audioContext = Tone.context;
+const multitrack = new Multitrack(audioContext);
 
 const track01 = document.getElementById('track-01')!
 const track02 = document.getElementById('track-02')!
@@ -19,7 +18,7 @@ function options(container: HTMLElement, audioBuffer: AudioBuffer) {
       container,
       
     },
-    player,
+    player: multitrack,
     webAudio: {
       audioBuffer,
     },

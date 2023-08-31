@@ -1,61 +1,82 @@
-import Player from "./player";
+import { EventEmitterForPlayerEvents, PlayerAdapter } from "peaks.js";
+import * as Tone from 'tone';
 
-export default class Multitrack {
-  audioContext: AudioContext;
-  player: Player;
+export default class Multitrack implements PlayerAdapter {
+  audioContext: Tone.BaseContext;
+  eventEmitter!: EventEmitterForPlayerEvents | null;
   tracks: {
-    arrayBuffer: ArrayBuffer;
-    audioBuffer: AudioBuffer;
-    audioSource: AudioBufferSourceNode;
+    player: Tone.Player,
+    audioBuffer: AudioBuffer,
   }[] = [];
-  gain: GainNode;
 
-  constructor(audioContext: AudioContext, player: Player) {
+
+  constructor(audioContext: Tone.BaseContext) {
     this.audioContext = audioContext;
-    this.player = player;
-    this.gain = audioContext.createGain();
+  }
+  init(eventEmitter: EventEmitterForPlayerEvents) {
+    this.eventEmitter = eventEmitter;
+
+
+    Tone.Transport.scheduleRepeat(() => {
+      const time = this.getCurrentTime();
+      eventEmitter.emit('player.timeupdate', time);
+
+      if (time >= this.getDuration()) {
+        Tone.Transport.stop();
+      }
+    }, 0.25);
+
+    return Promise.resolve();
+  };
+  destroy() {
+    Tone.context.dispose();
+
+    this.tracks = this.tracks.slice(-1, 0);
+    this.eventEmitter = null;
+  };
+  isPlaying() {
+    return Tone.Transport.state === "started";
+  }
+  isSeeking() { return false };
+  getCurrentTime() {
+    return Tone.Transport.seconds;
+  };
+  getDuration() {
+    const duration = this.tracks.reduce((previous, current) => {
+      if (current.audioBuffer.duration > previous) return current.audioBuffer.duration;
+      return previous;
+    }, 0);
+    return duration;
+  }
+  seek(time: number) {
+    Tone.Transport.seconds = time;
+
+    this.eventEmitter?.emit('player.seeked', this.getCurrentTime());
+    this.eventEmitter?.emit('player.timeupdate', this.getCurrentTime());
   }
 
   play() {
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
-    }
-    if (this.player.state === 'playing') return;
+    return Tone.start().then(() => {
+      Tone.Transport.start();
 
-    // Every time will play, must create the audioSource
-    this.tracks = this.tracks.map(track => {
-      const audioSource = this.audioContext.createBufferSource();
-      audioSource.buffer = track.audioBuffer;
-      audioSource.connect(this.gain).connect(this.audioContext.destination);
-      audioSource.start(
-        this.audioContext.currentTime,
-        this.player.getCurrentTimeSeconds(),
-      );
-      return {
-        ...track,
-        audioSource,
-      };
+      this.eventEmitter?.emit('player.playing', this.getCurrentTime());
     });
-    this.player.play();
   }
 
   pause() {
-    if (this.player.state === 'paused') return;
-    this.tracks.forEach(track => {
-      track.audioSource.stop(this.player.getCurrentTimeSeconds());
-    });
-    this.player.pause();
+    Tone.Transport.pause();
+
+    this.eventEmitter?.emit('player.pause', this.getCurrentTime());
   }
 
   async addTrack(arrayBuffer: ArrayBuffer) {
     const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-    const audioSource = this.audioContext.createBufferSource();
-    audioSource.buffer = audioBuffer;
-    audioSource.connect(this.gain).connect(this.audioContext.destination);
+    const player = new Tone.Player(audioBuffer).toDestination();
+    player.sync();
+    player.start();
     this.tracks.push({
-      audioBuffer,
-      arrayBuffer,
-      audioSource,
+      player,
+      audioBuffer
     });
     return audioBuffer;
   }
